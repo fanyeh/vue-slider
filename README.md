@@ -4,7 +4,7 @@
 
 ### Demo
 
-[vue-slider](vue-slider.surge.sh)
+http://vue-slider.surge.sh/
 
 ### Todo
 - Support RWD
