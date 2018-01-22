@@ -18,12 +18,12 @@
           v-on:transitionend="containerTransition"
           )
           .slide(
-            v-for="(content ,contentIndex) in contentContainer[slideContainerIndex]"
+            v-for="(content ,contentIndex) in contentContainer[container]"
             ref="slides"
             v-mouse:mouseover="{position: slideContainerIndex % 3,handler:selectSlide}"
             v-mouse:mouseout="{position: slideContainerIndex % 3,handler:unselectSlide}"
             :id="'slide-'+container+'-'+contentIndex"
-            :data-container-index="slideContainerIndex"
+            :data-container-index="container"
             :data-content-index="contentIndex"
           )
 </template>
@@ -53,41 +53,51 @@ export default {
   data() {
     return {
       defaultSize: 200,
-      contentContainer: [
-        [1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, 18]],
-      slideContainer: [0, 1, 2],
       bodyMarginLeft: document.body.getBoundingClientRect().left,
       expandShowcase: false,
       timeoutID: '',
-      ratioX: 2,
-      ratioY: 1.5,
+      ratioX: 1.6,
+      ratioY: 1.6,
       ratioOffset: 0,
       selectedSlidePos: {},
       isSliding: false,
+      slideContainer: [0, 1, 2],
+      contentContainer: [],
+      contentContainerSize: 6,
+      contentData:
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
     };
   },
+  created() {
+    this.setContentContainer();
+  },
   methods: {
+    updateContentContainer() {
+      this.contentContainer = _.chunk(this.contentData, this.contentContainerSize);
+      this.slideContainer = [0, 1, 2];
+      this.setColor(this.slideContainer[0]);
+      this.setColor(this.slideContainer[1]);
+      this.setColor(this.slideContainer[2]);
+    },
     left: _.debounce(function slideLeft() {
       if (!this.expandShowcase) {
         this.isSliding = true;
-        this.slideContainer.unshift(this.slideContainer[0] - 1);
-        this.contentContainer.unshift([2, 2, 2, 2, 2, 2]);
-        this.$nextTick(() => {
+        if (this.slideContainer[1] !== 0) {
+          this.slideContainer.unshift(this.slideContainer[0] - 1);
           this.slideContainer.pop();
-          this.contentContainer.pop();
-          this.setColor(0);
-        });
+          this.setColor(this.slideContainer[0]);
+        }
       }
     }, 500),
     right: _.debounce(function slideRight() {
       if (!this.expandShowcase) {
         this.isSliding = true;
-        this.slideContainer.push(this.slideContainer.slice(-1)[0] + 1);
-        this.contentContainer.push([1, 1, 1, 1, 1, 1]);
-        this.setColor(2, this.$nextTick(() => {
+        const containerID = _.last(this.slideContainer);
+        if (containerID < this.contentContainer.length) {
+          this.slideContainer.push(containerID + 1);
+          this.setColor(_.last(this.slideContainer));
           this.slideContainer.shift();
-          this.contentContainer.shift();
-        }));
+        }
       }
     }, 500),
     selectSlide(event) {
@@ -181,25 +191,41 @@ export default {
       });
     },
     setColor(containerIndex, callback) {
-      this.$nextTick(() => {
-        this.contentContainer[containerIndex].forEach((content, contentIndex) => {
-          const containerID = this.slideContainer[containerIndex];
-          const slideID = `#slide-${containerID}-${contentIndex}`;
-          const slide = this.$el.querySelector(slideID);
-          const offset = contentIndex * 7;
-          const hue = (containerID * 20) % 360;
-          this.setStyleProperty(slide, { 'background-color': `hsl(${hue},${40 + offset}%,${50 + offset}%)` });
+      if (containerIndex > -1 && containerIndex < this.contentContainer.length) {
+        this.$nextTick(() => {
+          this.contentContainer[containerIndex].forEach((content, contentIndex) => {
+            const slideID = `#slide-${containerIndex}-${contentIndex}`;
+            const slide = this.$el.querySelector(slideID);
+            const offset = contentIndex * 7;
+            const hue = (containerIndex * 20) % 360;
+            this.setStyleProperty(slide, { 'background-color': `hsl(${hue},${40 + offset}%,${50 + offset}%)` });
+          });
+          if (callback) {
+            callback();
+          }
         });
-        if (callback) {
-          callback();
-        }
-      });
+      }
     },
     setStyleProperty(element, styles) {
       Object.assign(element.style, styles);
     },
     containerTransition() {
       this.isSliding = false;
+    },
+    resetSize() {
+      this.setContentContainer();
+    },
+    setContentContainer() {
+      if (window.matchMedia('(max-width: 480px)').matches) {
+        this.contentContainerSize = 2;
+      } else if (window.matchMedia('(max-width: 768px)').matches) {
+        this.contentContainerSize = 3;
+      } else if (window.matchMedia('(max-width:1024px)').matches) {
+        this.contentContainerSize = 4;
+      } else {
+        this.contentContainerSize = 6;
+      }
+      this.updateContentContainer();
     },
   },
   mounted() {
@@ -209,22 +235,57 @@ export default {
     this.slideContainer.forEach((container, index) => {
       this.setColor(index);
     });
-    this.ratioOffset = (this.ratioOffset - 1) / 2;
+    this.ratioOffset = (this.ratioX - 1) / -2;
+    window.addEventListener('resize', _.debounce(this.resetSize, 150));
   },
 };
 </script>
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style lang="scss" scoped>
+
+/* Medium Devices, Desktops */
+@mixin md-screen {
+  @media only screen and (max-width : 1024px) {
+    @content;
+  }
+}
+
+/* Small Devices, Tablets */
+@mixin sm-screen {
+  @media only screen and (max-width : 768px) {
+    @content;
+  }
+}
+
+/* Extra small devices */
+@mixin xs-screen {
+  @media only screen and (max-width : 480px) {
+    @content;
+  }
+}
+
+@function slide-width($numOfSlides) {
+  @return (90vw - $numOfSlides * 0.1vw) / $numOfSlides;
+}
+
+@function slide-height($width) {
+  @return $width * 0.6;
+}
+
 .container {
   --duration: 0.4s;
   --cubic-bezier: cubic-bezier( 0.5 , 0, 0.1 ,1);
   position: relative;
 }
 
+.container > * {
+  box-sizing: border-box;
+}
+
 .slide-button {
   width: 5vw;
-  height: var(--blockSize);
+  height: slide-height(slide-width(6));
   background-color: black;
   opacity: 0.6;
   position: absolute;
@@ -236,10 +297,6 @@ export default {
 }
 .slide-button.slide-button--right {
   right: 0;
-}
-
-.hello > * {
-  box-sizing: border-box;
 }
 
 .slider-wrapper {
@@ -263,11 +320,41 @@ export default {
 }
 
 .slide {
-  width:14.9vw;
-  height: var(--blockSize);
+  width:slide-width(6);
+  height: slide-height(slide-width(6));
   transition: transform var(--duration) var(--cubic-bezier);
   will-change: transform;
   margin: auto;
+}
+
+@include md-screen {
+  .slide {
+    width:slide-width(4);
+    height: slide-height(slide-width(4));
+  }
+  .slide-button {
+    height:slide-height(slide-width(4));
+  }
+}
+
+@include sm-screen {
+  .slide {
+    width:slide-width(3);
+    height: slide-height(slide-width(3));
+  }
+  .slide-button {
+    height:slide-height(slide-width(3));
+  }
+}
+
+@include xs-screen {
+  .slide {
+    width:slide-width(2);
+    height: slide-height(slide-width(2));
+  }
+  .slide-button {
+    height:slide-height(slide-width(2));
+  }
 }
 
 .showcase {
