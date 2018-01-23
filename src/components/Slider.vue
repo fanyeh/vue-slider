@@ -4,13 +4,12 @@
     .slide-button(
       @click="right"
       class="slide-button--right"
-      v-if="slideContainer[1] !== contentContainer.length -1"
     )
       i(class="fa fa-chevron-right fa-2x" aria-hidden="true" )
     .slide-button(
       @click="left"
       class="slide-button--left"
-      v-if="slideContainer[0] !== -1"
+      v-if="infinityLoop"
     )
       i(class="fa fa-chevron-left fa-2x" aria-hidden="true")
 
@@ -34,9 +33,9 @@
             v-mouse:mouseover="{position: slideContainerIndex % 3,handler:selectSlide}"
             v-mouse:mouseout="{position: slideContainerIndex % 3,handler:unselectSlide}"
             :id="'slide-'+container+'-'+contentIndex"
-            :data-container-index="container"
+            :data-container-index="slideContainerIndex"
             :data-content-index="contentIndex"
-          )
+          ) {{content}}
 </template>
 
 
@@ -63,7 +62,6 @@ export default {
   },
   data() {
     return {
-      defaultSize: 200,
       bodyMarginLeft: document.body.getBoundingClientRect().left,
       expandShowcase: false,
       timeoutID: '',
@@ -75,28 +73,37 @@ export default {
       contentContainerSize: 6,
       contentData:
       [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+      infinityLoop: false,
     };
   },
   methods: {
     left: _.debounce(function slideLeft() {
       if (!this.expandShowcase) {
-        if (this.slideContainer[1] !== 0) {
-          this.isSliding = true;
+        this.isSliding = true;
+        // Infinity loop
+        if (this.slideContainer[0] === 0) {
+          const page = this.contentContainer.length - 1;
+          this.slideContainer.unshift(page);
+        } else {
           this.slideContainer.unshift(this.slideContainer[0] - 1);
-          this.slideContainer.pop();
-          this.setColor(this.slideContainer[0]);
         }
+        this.slideContainer.pop();
+        this.setColor(this.slideContainer[0]);
       }
     }, 500),
     right: _.debounce(function slideRight() {
-      if (!this.expandShowcase) {
-        const containerID = _.last(this.slideContainer);
-        if (containerID < this.contentContainer.length) {
-          this.isSliding = true;
-          this.slideContainer.push(containerID + 1);
-          this.setColor(_.last(this.slideContainer));
-          this.slideContainer.shift();
+      if (!this.expandShowcase && _.last(this.slideContainer) < this.contentContainer.length) {
+        this.isSliding = true;
+        this.infinityLoop = true;
+        // Infinity loop
+        if (_.last(this.slideContainer) === this.contentContainer.length - 1) {
+          const page = (this.contentContainer.length - _.last(this.slideContainer)) - 1;
+          this.slideContainer.push(page);
+        } else {
+          this.slideContainer.push(_.last(this.slideContainer) + 1);
         }
+        this.slideContainer.shift();
+        this.setColor(_.last(this.slideContainer));
       }
     }, 500),
     selectSlide(event) {
@@ -106,17 +113,17 @@ export default {
           this.selectedSlidePos = this.slideIsFirstOrLast(selectedSlide);
           const transitionDistance = this.transitionDistance(selectedSlide);
           const selectedContainer = this.containerIndex(selectedSlide);
-          this.setShowcase(selectedSlide);
+          this.popShowcase(selectedSlide);
           const animationCallback = (currentSlide) => {
             if (currentSlide !== selectedSlide) {
               const currentContainer = this.containerIndex(currentSlide);
               let direction = 0;
               if (this.selectedSlidePos.isFirst) {
-                if (currentContainer >= selectedContainer) {
+                if (currentContainer >= 1) {
                   direction = 1;
                 }
               } else if (this.selectedSlidePos.isLast) {
-                if (currentContainer <= selectedContainer) {
+                if (currentContainer <= 1) {
                   direction = -1;
                 }
               } else if (currentContainer === selectedContainer) {
@@ -160,7 +167,16 @@ export default {
       }
       return element.clientWidth * ((this.ratio - 1) / -2);
     },
-    setShowcase(selectedSlide) {
+    animateSlideTransition(callback) {
+      this.$refs.slides.forEach((slide) => {
+        callback(slide);
+      });
+    },
+    containerTransition() {
+      // Triggered by 'transitionend' event from slider container
+      this.isSliding = false;
+    },
+    popShowcase(selectedSlide) {
       const selectedRect = selectedSlide.getBoundingClientRect();
       const showcaseWidth = selectedRect.left - this.bodyMarginLeft;
       const showcaseStyle = {
@@ -187,33 +203,6 @@ export default {
         });
       }
     },
-    animateSlideTransition(callback) {
-      this.$refs.slides.forEach((slide) => {
-        callback(slide);
-      });
-    },
-    setColor(containerIndex, callback) {
-      if (containerIndex > -1 && containerIndex < this.contentContainer.length) {
-        this.$nextTick(() => {
-          this.contentContainer[containerIndex].forEach((content, contentIndex) => {
-            const slideID = `#slide-${containerIndex}-${contentIndex}`;
-            const slide = this.$el.querySelector(slideID);
-            const offset = contentIndex * 7;
-            const hue = (containerIndex * 20) % 360;
-            this.setStyleProperty(slide, { 'background-color': `hsl(${hue},${40 + offset}%,${50 + offset}%)` });
-          });
-          if (callback) {
-            callback();
-          }
-        });
-      }
-    },
-    setStyleProperty(element, styles) {
-      Object.assign(element.style, styles);
-    },
-    containerTransition() {
-      this.isSliding = false;
-    },
     resetContentContainer() {
       this.setContentContainer();
       this.updateContentContainer();
@@ -236,9 +225,28 @@ export default {
       this.setColor(this.slideContainer[1]);
       this.setColor(this.slideContainer[2]);
     },
+    setColor(containerIndex, callback) {
+      // Helper function for the demo
+      if (containerIndex > -1 && containerIndex < this.contentContainer.length) {
+        this.$nextTick(() => {
+          this.contentContainer[containerIndex].forEach((content, contentIndex) => {
+            const slideID = `#slide-${containerIndex}-${contentIndex}`;
+            const slide = this.$el.querySelector(slideID);
+            const offset = contentIndex * 7;
+            const hue = (containerIndex * 20) % 360;
+            this.setStyleProperty(slide, { 'background-color': `hsl(${hue},${40 + offset}%,${50 + offset}%)` });
+          });
+          if (callback) {
+            callback();
+          }
+        });
+      }
+    },
+    setStyleProperty(element, styles) {
+      Object.assign(element.style, styles);
+    },
   },
   mounted() {
-    this.$el.style.setProperty('--blockSize', `${this.defaultSize}px`);
     this.$el.style.setProperty('--ratio', `${this.ratio}`);
     this.slideContainer.forEach((container) => {
       this.setColor(container);
@@ -292,7 +300,7 @@ $slider-width: $slider-container-width *3;
   --cubic-bezier: cubic-bezier( 0.5 , 0, 0.1 ,1);
   position: relative;
 }
-.container > * {
+.container * {
   box-sizing: border-box;
 }
 
@@ -325,7 +333,6 @@ $slider-width: $slider-container-width *3;
   visibility: hidden;
   transition: transform var(--duration) var(--cubic-bezier),visibility 0s calc(var(--duration));
   will-change: transform, visibility;
-  border:1px solid black;
   z-index: 10;
 }
 .showcase.expand {
@@ -356,8 +363,7 @@ $slider-width: $slider-container-width *3;
   height: slide-height(slide-width(6));
   transition: transform var(--duration) var(--cubic-bezier);
   will-change: transform;
-  border:1px solid black;
-  box-sizing: border-box;
+  // box-sizing: border-box;
 }
 
 /* Slider Transition*/

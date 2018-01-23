@@ -7,5 +7,9 @@
 http://vue-slider.surge.sh/
 
 ### Todo
-- Support RWD
+- ~~Support RWD~~
+- ~~Infinity sliding~~
+
+### Note
+- Recommend to set HTML Body margin:0 to get correct position and transition of slides.
 
